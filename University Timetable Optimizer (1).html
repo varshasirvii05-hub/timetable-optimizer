@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>University Timetable Optimizer</title>
+<style>
+:root{--bg:#f5f3ee;--card:#fff;--ink:#1b2440;--mute:#5d6682;--line:#d9dbe4;--acc:#1f3a8a;--ok:#1d7a4d;--bad:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10152a;--card:#1a2140;--ink:#e8ebf7;--mute:#9aa3c4;--line:#2d3660;--acc:#8fa8ff;--ok:#5fd39a;--bad:#ff8a80}}
+:root[data-theme="dark"]{--bg:#10152a;--card:#1a2140;--ink:#e8ebf7;--mute:#9aa3c4;--line:#2d3660;--acc:#8fa8ff;--ok:#5fd39a;--bad:#ff8a80}
+*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2{font-family:Georgia,"Times New Roman",serif;margin:0}
+header{background:var(--acc);color:#fff;padding:28px 20px}header p{margin:6px 0 0;opacity:.85;max-width:62ch}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) header{color:#10152a}}
+main{max-width:1180px;margin:0 auto;padding:20px;display:grid;gap:20px}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+h2{font-size:20px;margin-bottom:12px}
+.grid2{display:grid;grid-template-columns:1.6fr 1fr;gap:20px}@media(max-width:860px){.grid2{grid-template-columns:1fr}}
+.wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+input,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 7px;width:100%;min-width:60px}
+input[type=number]{width:80px}textarea{height:70px}
+button{font:inherit;cursor:pointer;border:1px solid var(--acc);background:transparent;color:var(--acc);border-radius:6px;padding:6px 12px}
+button.primary{background:var(--acc);color:#fff;font-weight:600;padding:10px 20px}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) button.primary{color:#10152a}}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:12px}.stat b{display:block;font:700 26px Georgia,serif}.stat span{color:var(--mute);font-size:13px}
+.tabs button{border-radius:20px}.tabs button.on{background:var(--acc);color:#fff}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .tabs button.on{color:#10152a}}
+.steps{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.pill{border:1px solid var(--line);border-radius:20px;padding:3px 12px;font-size:13px;color:var(--mute)}.pill.done{border-color:var(--ok);color:var(--ok)}
+.msg{padding:12px 14px;border-radius:8px;margin-top:10px;border:1px solid}.msg.ok{color:var(--ok);border-color:var(--ok)}.msg.bad{color:var(--bad);border-color:var(--bad)}
+svg{width:100%;height:auto;max-height:480px}.edge{stroke:var(--mute);stroke-width:1.5;opacity:.55}.edge.hl{stroke:var(--acc);stroke-width:3;opacity:1}
+.node{cursor:pointer}.cell{border-radius:6px;padding:4px 6px;color:#1b2440;font-size:12px;line-height:1.3}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px;font-size:12.5px;white-space:pre-wrap;margin:0;max-height:240px;overflow:auto}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.flow span{border:1px solid var(--acc);border-radius:6px;padding:4px 10px;font-size:13px}.flow i{color:var(--mute)}
+</style></head><body>
+<header><h1>University Timetable Optimizer</h1><p>Greedy graph coloring assigns time slots, a greedy allocator packs classes into the fewest rooms, and a validator checks every constraint.</p></header>
+<main>
+<section id="inputs"><h2>Input data</h2>
+<div class="grid2"><div><div class="wrap"><table><thead><tr><th>Course</th><th>Instructor</th><th>Group</th><th>Students</th><th></th></tr></thead><tbody id="cBody"></tbody></table></div>
+<div class="row"><button onclick="addCourse()">Add course</button></div></div>
+<div><div class="wrap"><table><thead><tr><th>Room</th><th>Capacity</th><th></th></tr></thead><tbody id="rBody"></tbody></table></div>
+<div class="row"><button onclick="addRoom()">Add room</button></div>
+<div class="row"><label>Periods per day <input type="number" id="periods" min="1" max="8" value="4"></label></div>
+<label style="display:block;margin-top:10px">Unavailable (one per line, <i>Name:Day</i> for an instructor or group)<textarea id="blocked">Dr. Rao:Mon</textarea></label></div></div>
+<div class="row"><button class="primary" onclick="generateTimetable()">Generate timetable</button><button onclick="resetData()">Reset sample data</button></div></section>
+
+<section><h2>Algorithm visualization</h2>
+<div class="steps" id="steps"></div>
+<div class="tabs row"><button data-s="1" onclick="setStage(1)">Stage 1: Conflict graph</button><button data-s="2" onclick="setStage(2)">Stage 2: Graph coloring</button><button data-s="3" onclick="setStage(3)">Stage 3: Room allocation</button></div>
+<div class="grid2" style="margin-top:12px"><div id="graph"></div><div><pre id="log">Press Generate timetable to run the algorithms.</pre><p style="color:var(--mute);font-size:13px">Hover or tap a class to highlight its conflicts.</p></div></div></section>
+
+<section><h2>Statistics</h2><div class="stats" id="stats"></div><div id="verdict"></div></section>
+<section><h2>Weekly timetable</h2><div class="wrap" id="grid"></div></section>
+<section><h2>Final timetable</h2><div class="wrap"><table><thead><tr><th>Day</th><th>Time</th><th>Course</th><th>Instructor</th><th>Group</th><th>Room</th></tr></thead><tbody id="final"></tbody></table></div></section>
+<section><h2>How it works</h2><div class="flow" id="flow"></div>
+<p style="color:var(--mute)">Two classes conflict when they share a student group or an instructor. Each class becomes a graph vertex, each conflict an edge, and greedy coloring gives adjacent vertices different colors, so each color becomes one time slot. Within a slot, classes are sorted by enrollment and each takes the smallest room that fits. Rooms needed equals the busiest slot.</p></section>
+</main>
+<script>
+const DAYS=['Mon','Tue','Wed','Thu','Fri'];
+const SAMPLE_C=[["Data Structures","Dr. Rao","CSE-A",55],["Database Systems","Dr. Sharma","CSE-B",50],["Operating Systems","Dr. Kumar","CSE-A",55],["Computer Networks","Dr. Priya","CSE-C",45],["Mathematics","Dr. Rao","CSE-C",45],["Python Programming","Dr. Mehta","CSE-B",50]];
+const SAMPLE_R=[["Room 101",60],["Room 102",55],["Room 103",50],["Lab 201",60]];
+let courses=[],rooms=[],R=null,stage=3;
+const hue=k=>`hsl(${(k*47+200)%360} 70% 82%)`, hueDark=k=>`hsl(${(k*47+200)%360} 55% 38%)`;
+const $=id=>document.getElementById(id), esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const timeOf=p=>{const h=9+p;return `${h}:00-${h+1}:00`};
+document.getElementById('flow').innerHTML=['Input','Conflict Detection','Graph Creation','Greedy Graph Coloring','Time Slot Assignment','Greedy Room Allocation','Conflict Validation','Final Timetable'].map(s=>`<span>${s}</span>`).join('<i>&rarr;</i>');
+
+function resetData(){courses=SAMPLE_C.map((c,i)=>({id:i,name:c[0],inst:c[1],group:c[2],n:c[3]}));rooms=SAMPLE_R.map(r=>({name:r[0],cap:r[1]}));renderInputs();generateTimetable()}
+function renderInputs(){
+ $('cBody').innerHTML=courses.map((c,i)=>`<tr><td><input value="${esc(c.name)}" oninput="courses[${i}].name=this.value"></td><td><input value="${esc(c.inst)}" oninput="courses[${i}].inst=this.value"></td><td><input value="${esc(c.group)}" oninput="courses[${i}].group=this.value"></td><td><input type="number" value="${c.n}" oninput="courses[${i}].n=+this.value"></td><td><button onclick="courses.splice(${i},1);renderInputs()">Delete</button></td></tr>`).join('');
+ $('rBody').innerHTML=rooms.map((r,i)=>`<tr><td><input value="${esc(r.name)}" oninput="rooms[${i}].name=this.value"></td><td><input type="number" value="${r.cap}" oninput="rooms[${i}].cap=+this.value"></td><td><button onclick="rooms.splice(${i},1);renderInputs()">Delete</button></td></tr>`).join('')}
+function addCourse(){courses.push({id:Date.now(),name:'New course',inst:'Dr. New',group:'CSE-A',n:40});renderInputs()}
+function addRoom(){rooms.push({name:'Room '+(rooms.length+101),cap:50});renderInputs()}
+
+/* ---------- GRAPH COLORING (part 1): build the conflict graph ---------- */
+function buildConflictGraph(cs){
+ const adj=cs.map(()=>new Set()),edges=[];
+ for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++){
+  const reasons=[];
+  if(cs[i].inst.trim()&&cs[i].inst===cs[j].inst)reasons.push('instructor');
+  if(cs[i].group.trim()&&cs[i].group===cs[j].group)reasons.push('student group');
+  if(reasons.length){adj[i].add(j);adj[j].add(i);edges.push({a:i,b:j,why:reasons.join(' + ')})}}
+ return{adj,edges}}
+
+/* ---------- GRAPH COLORING (part 2) + GREEDY: Welsh-Powell ordering, smallest free color ---------- */
+function greedyGraphColoring(g){
+ const n=g.adj.length,color=Array(n).fill(-1);
+ const order=[...Array(n).keys()].sort((a,b)=>g.adj[b].size-g.adj[a].size); // highest degree first
+ const steps=[];
+ for(const v of order){
+  const used=new Set([...g.adj[v]].map(u=>color[u]).filter(c=>c>=0));
+  let c=0;while(used.has(c))c++;           // greedy choice: first color not used by a neighbour
+  color[v]=c;steps.push({v,c,deg:g.adj[v].size})}
+ return{color,steps,count:n?Math.max(...color)+1:0}}
+
+/* ---------- SCHEDULING: map each color class to a real weekly slot, honouring availability ---------- */
+function scheduleColors(color,count,P,blocked){
+ const order=[];for(let p=0;p<P;p++)for(let d=0;d<5;d++)order.push({d,p}); // spread across days first
+ const taken=new Set(),slotOf=[],problems=[];
+ for(let k=0;k<count;k++){
+  const members=color.map((c,i)=>c===k?i:-1).filter(i=>i>=0);
+  const s=order.findIndex((o,idx)=>!taken.has(idx)&&members.every(i=>!blocked.some(b=>(b.n===courses[i].inst||b.n===courses[i].group)&&b.d===o.d)));
+  if(s<0){problems.push(`Time slot ${k+1}: no free weekly period that respects availability`);slotOf[k]=null}
+  else{taken.add(s);slotOf[k]=order[s]}}
+ return{slotOf,problems}}
+
+/* ---------- GREEDY ALGORITHM: first suitable free room, classes sorted by enrollment ---------- */
+function allocateRoomsGreedy(cs,color,count,rms){
+ const sorted=[...rms].sort((a,b)=>a.cap-b.cap),room=Array(cs.length).fill(null),problems=[],log=[];
+ for(let k=0;k<count;k++){
+  const busy=new Set();
+  const members=cs.map((_,i)=>i).filter(i=>color[i]===k).sort((a,b)=>cs[b].n-cs[a].n);
+  for(const i of members){
+   const r=sorted.find(r=>!busy.has(r.name)&&r.cap>=cs[i].n); // first free room big enough (smallest-fit)
+   if(r){busy.add(r.name);room[i]=r;log.push(`  Slot ${k+1}: ${cs[i].name} (${cs[i].n}) -> ${r.name} [cap ${r.cap}]`)}
+   else problems.push(`${cs[i].name} (${cs[i].n} students) has no free room with enough capacity in slot ${k+1}`)}}
+ return{room,problems,log}}
+
+function calculateRoomUtilization(cs,color,room,count){
+ const used=new Set(room.filter(Boolean).map(r=>r.name)),needed=count?Math.max(...Array.from({length:count},(_,k)=>cs.filter((_,i)=>color[i]===k&&room[i]).length)):0;
+ const usedSlots=room.filter(Boolean).length,avail=needed*count;
+ const per={};room.forEach((r,i)=>{if(r)per[r.name]=(per[r.name]||0)+1});
+ return{needed,distinct:used.size,pct:avail?Math.round(100*usedSlots/avail):0,per}}
+
+/* ---------- Conflict checker: re-verifies the finished timetable independently ---------- */
+function validateConflicts(cs,A){
+ const out={inst:[],stu:[],room:[],cap:[],unplaced:[]};
+ cs.forEach((c,i)=>{if(!A[i]||!A[i].slot){out.unplaced.push(c.name+' has no time slot');return}
+  if(!A[i].room)out.cap.push(`${c.name}: no room with capacity >= ${c.n}`);else if(A[i].room.cap<c.n)out.cap.push(`${c.name}: room too small`)});
+ for(let i=0;i<cs.length;i++)for(let j=i+1;j<cs.length;j++){
+  if(!A[i]?.slot||!A[j]?.slot)continue;
+  if(A[i].slot.d!==A[j].slot.d||A[i].slot.p!==A[j].slot.p)continue;
+  if(cs[i].inst===cs[j].inst)out.inst.push(`${cs[i].inst}: ${cs[i].name} and ${cs[j].name}`);
+  if(cs[i].group===cs[j].group)out.stu.push(`${cs[i].group}: ${cs[i].name} and ${cs[j].name}`);
+  if(A[i].room&&A[j].room&&A[i].room.name===A[j].room.name)out.room.push(`${A[i].room.name}: ${cs[i].name} and ${cs[j].name}`)}
+ return out}
+
+/* ---------- Pipeline: Input -> graph -> coloring -> scheduling -> rooms -> validation ---------- */
+function generateTimetable(){
+ const P=Math.max(1,Math.min(8,+$('periods').value||4));
+ const blocked=$('blocked').value.split('\n').map(l=>l.split(':')).filter(a=>a.length===2).map(a=>({n:a[0].trim(),d:DAYS.indexOf(a[1].trim().slice(0,3))})).filter(b=>b.d>=0);
+ const g=buildConflictGraph(courses),col=greedyGraphColoring(g),sch=scheduleColors(col.color,col.count,P,blocked),ra=allocateRoomsGreedy(courses,col.color,col.count,rooms);
+ const A=courses.map((c,i)=>({slot:sch.slotOf[col.color[i]],room:ra.room[i],color:col.color[i]}));
+ const val=validateConflicts(courses,A),util=calculateRoomUtilization(courses,col.color,ra.room,col.count);
+ R={g,col,sch,ra,A,val,util,P,log:[
+  'STAGE 1 - Conflict graph (Graph Coloring input)',`  ${courses.length} vertices, ${g.edges.length} edges`,...g.edges.map(e=>`  ${courses[e.a].name} -- ${courses[e.b].name} (${e.why})`),
+  '','STAGE 2 - Greedy coloring (highest degree first)',...col.steps.map(s=>`  ${courses[s.v].name} (degree ${s.deg}) -> color ${s.c+1}`),`  Time slots used: ${col.count}`,
+  '','STAGE 3 - Greedy room allocation',...ra.log,...ra.problems.map(p=>'  ! '+p),...sch.problems.map(p=>'  ! '+p)].join('\n')};
+ render()}
+function setStage(s){stage=s;if(R)renderGraph();document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',+b.dataset.s===s))}
+
+function render(){
+ $('log').textContent=R.log;
+ $('steps').innerHTML=['Conflict graph built','Greedy coloring done','Rooms allocated','Validation '+(isClean()?'passed':'found issues')].map((s,i)=>`<span class="pill ${i<3||isClean()?'done':''}">${i<3||isClean()?'&#10003; ':'! '}${s}</span>`).join('');
+ renderGraph();renderStats();renderTables();setStage(stage)}
+const isClean=()=>Object.values(R.val).every(a=>!a.length)&&!R.sch.problems.length;
+
+function renderGraph(){
+ const n=courses.length,W=520,H=420,cx=W/2,cy=H/2,rad=Math.min(W,H)/2-60;
+ const pos=courses.map((_,i)=>({x:cx+rad*Math.cos(2*Math.PI*i/n-Math.PI/2),y:cy+rad*Math.sin(2*Math.PI*i/n-Math.PI/2)}));
+ let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Conflict graph">`;
+ R.g.edges.forEach((e,k)=>s+=`<line class="edge" data-a="${e.a}" data-b="${e.b}" x1="${pos[e.a].x}" y1="${pos[e.a].y}" x2="${pos[e.b].x}" y2="${pos[e.b].y}"><title>${esc(e.why)}</title></line>`);
+ courses.forEach((c,i)=>{const col=R.A[i].color,fill=stage===1?'var(--line)':hue(col);
+  const lab=stage===3&&R.A[i].room?R.A[i].room.name:stage>=2?'Slot '+(col+1):'';
+  s+=`<g class="node" data-i="${i}" tabindex="0"><circle cx="${pos[i].x}" cy="${pos[i].y}" r="30" fill="${fill}" stroke="var(--ink)" stroke-width="1.5"/><text x="${pos[i].x}" y="${pos[i].y+4}" text-anchor="middle" font-size="11" fill="#1b2440">${esc(lab||'#'+(i+1))}</text><text x="${pos[i].x}" y="${pos[i].y+46}" text-anchor="middle" font-size="11" fill="var(--ink)">${esc(c.name.length>16?c.name.slice(0,15)+'…':c.name)}</text></g>`});
+ $('graph').innerHTML=s+'</svg>';
+ const hl=(i,on)=>document.querySelectorAll('.edge').forEach(e=>e.classList.toggle('hl',on&&(+e.dataset.a===i||+e.dataset.b===i)));
+ document.querySelectorAll('.node').forEach(nd=>{const i=+nd.dataset.i;['mouseenter','focus','touchstart'].forEach(ev=>nd.addEventListener(ev,()=>hl(i,true)));['mouseleave','blur'].forEach(ev=>nd.addEventListener(ev,()=>hl(i,false)))})}
+
+function renderStats(){
+ const v=R.val,items=[['Total classes',courses.length],['Time slots used',R.col.count],['Classrooms required',R.util.needed],['Room utilization',R.util.pct+'%'],['Instructor conflicts',v.inst.length],['Student conflicts',v.stu.length],['Room conflicts',v.room.length]];
+ $('stats').innerHTML=items.map(([l,x])=>`<div class="stat"><b>${x}</b><span>${l}</span></div>`).join('');
+ const per=Object.entries(R.util.per).map(([k,x])=>`${esc(k)}: ${x} class${x>1?'es':''}`).join(' | ');
+ const issues=[...v.inst.map(x=>'Instructor conflict - '+x),...v.stu.map(x=>'Student conflict - '+x),...v.room.map(x=>'Room conflict - '+x),...v.cap.map(x=>'Capacity - '+x),...v.unplaced,...R.sch.problems];
+ $('verdict').innerHTML=(isClean()?`<div class="msg ok"><b>No conflicts found.</b> Instructors, student groups and rooms are all free of clashes and every room fits its class.</div>`:`<div class="msg bad"><b>${issues.length} problem(s) found:</b><ul>${issues.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>Add periods or rooms, or relax availability, then generate again.</div>`)+`<p style="color:var(--mute)">Room usage: ${per||'none'}</p>`}
+
+function renderTables(){
+ const cell={};courses.forEach((c,i)=>{const a=R.A[i];if(a.slot)(cell[a.slot.d+'-'+a.slot.p]=cell[a.slot.d+'-'+a.slot.p]||[]).push(i)});
+ let h='<table><thead><tr><th>Time</th>'+DAYS.map(d=>`<th>${d}</th>`).join('')+'</tr></thead><tbody>';
+ for(let p=0;p<R.P;p++){h+=`<tr><td>${timeOf(p)}</td>`;for(let d=0;d<5;d++)h+='<td>'+(cell[d+'-'+p]||[]).map(i=>`<div class="cell" style="background:${hue(R.A[i].color)};margin-bottom:3px"><b>${esc(courses[i].name)}</b><br>${esc(courses[i].group)} | ${R.A[i].room?esc(R.A[i].room.name):'no room'}</div>`).join('')+'</td>';h+='</tr>'}
+ $('grid').innerHTML=h+'</tbody></table>';
+ const rows=courses.map((c,i)=>({c,a:R.A[i]})).filter(r=>r.a.slot).sort((x,y)=>x.a.slot.d-y.a.slot.d||x.a.slot.p-y.a.slot.p);
+ $('final').innerHTML=rows.map(({c,a})=>`<tr><td>${DAYS[a.slot.d]}</td><td>${timeOf(a.slot.p)}</td><td><span class="cell" style="background:${hue(a.color)}">${esc(c.name)}</span></td><td>${esc(c.inst)}</td><td>${esc(c.group)}</td><td>${a.room?esc(a.room.name):'<b style="color:var(--bad)">Unassigned</b>'}</td></tr>`).join('')}
+resetData();
+</script></body></html>
